@@ -1,8 +1,8 @@
 # zsh-dual-history — Separate human commands from AI instructions in zsh history
 #
 # Core (always active, no dependencies):
-#   zshaddhistory hook routes ":" commands to ~/.zsh_ai_history
-#
+#   preexec hook writes ": " commands to ~/.zsh_ai_history
+#   zshaddhistory hook prevents them from reaching the main history file
 # Requires fzf 0.52.0+ for the Ctrl+R widget integration.
 # Oh My Zsh recommended but optional.
 #
@@ -24,15 +24,24 @@ _DUAL_HISTORY_LOADED=1
 : ${DUAL_HISTORY_AI_FILE:="$HOME/.zsh_ai_history"}
 
 # ---- Route ": " commands to AI history, not main history ----
-_dual_history_zshaddhistory() {
+
+# preexec fires reliably for every single command — this is the primary writer
+_dual_history_preexec() {
   if [[ $1 == :* ]]; then
     print -r -- ": $(date +%s):0;$1" >> "$DUAL_HISTORY_AI_FILE"
+  fi
+}
+
+# zshaddhistory prevents ": " commands from reaching the main history file
+_dual_history_zshaddhistory() {
+  if [[ $1 == :* ]]; then
     return 1
   fi
   return 0
 }
 
 autoload -U add-zsh-hook
+add-zsh-hook preexec _dual_history_preexec
 add-zsh-hook zshaddhistory _dual_history_zshaddhistory
 
 # ---- Helper scripts for fzf reload (fzf runs reload via /bin/sh) ----
