@@ -9,6 +9,22 @@ Forge (with Oh My Zsh) sends instructions to AI models by prefixing them with
 `:` (a zsh no-op builtin). These instructions pollute your `Ctrl+R` and `history`
 output, mixing with your day-to-day shell commands.
 
+## The solution
+
+**zsh-dual-history** intercepts every command before zsh writes it to disk and
+routes it to the right history file:
+
+- `:` commands (AI instructions) → `~/.zsh_ai_history`
+- everything else (your commands) → `~/.zsh_history`
+
+Your shell history stays 100% clean — `history`, `!!`, completions, everything —
+while AI instructions are preserved in a separate file you can still search
+and replay.
+
+On top of that, the `Ctrl+R` widget becomes a smart fzf interface showing
+**both** histories merged, with one-key toggles (`Tab`, `Alt+H`, `Alt+I`,
+`Alt+A`) to switch between All / Human / AI views on the fly.
+
 ## Installation
 
 ### With your AI coding agent (recommended)

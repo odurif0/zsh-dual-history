@@ -22,13 +22,18 @@
 _DUAL_HISTORY_LOADED=1
 
 : ${DUAL_HISTORY_AI_FILE:="$HOME/.zsh_ai_history"}
+# Exported so the fzf reload scripts (children of fzf, not of this shell) see it
+export DUAL_HISTORY_AI_FILE
 
 # ---- Route ": " commands to AI history, not main history ----
 
-# preexec fires reliably for every single command — this is the primary writer
+# preexec fires reliably for every single command — this is the primary writer.
+# Entry format mirrors zsh EXTENDED_HISTORY (": <ts>:<dur>;<cmd>"), with
+# embedded newlines escaped as "<backslash><newline>" like zsh does.
 _dual_history_preexec() {
   if [[ $1 == :* ]]; then
-    print -r -- ": $(date +%s):0;$1" >> "$DUAL_HISTORY_AI_FILE"
+    local cmd=${1//$'\n'/'\'$'\n'}
+    print -r -- ": ${EPOCHSECONDS:-$(date +%s)}:0;$cmd" >> "$DUAL_HISTORY_AI_FILE"
   fi
 }
 
@@ -44,36 +49,47 @@ autoload -U add-zsh-hook
 add-zsh-hook preexec _dual_history_preexec
 add-zsh-hook zshaddhistory _dual_history_zshaddhistory
 
+zmodload zsh/datetime 2>/dev/null  # $EPOCHSECONDS, avoids forking date(1)
+
 # ---- Helper scripts for fzf reload (fzf runs reload via /bin/sh) ----
 _DH_PLUGIN_DIR="${0:A:h}"
-_DH_RELOAD_DIR="${XDG_CACHE_HOME:-$HOME}/.cache/zsh-dual-history"
+_DH_RELOAD_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/zsh-dual-history"
 
 if [[ -d "$_DH_PLUGIN_DIR/shell" ]]; then
   mkdir -p "$_DH_RELOAD_DIR"
   cp "$_DH_PLUGIN_DIR/shell"/* "$_DH_RELOAD_DIR/"
 fi
-chmod +x "$_DH_RELOAD_DIR"/reload-{ai,human,all,cycle}.sh 2>/dev/null
+chmod +x "$_DH_RELOAD_DIR"/reload-{ai,human,all,cycle,set}.sh 2>/dev/null
+
+# Purge orphaned tab-cycle state files (their fzf process is gone)
+for _dh_f in /tmp/fzf-dual-history-*(-.N); do
+  kill -0 "${${_dh_f:t}#fzf-dual-history-}" 2>/dev/null || rm -f -- "$_dh_f"
+done
+unset _dh_f
 
 # ---- Tab-cycling Ctrl+R widget ----
 _dual_history_patch_ctrl_r() {
-  (( ${+functions[fzf-history-widget]} )) || return
-  (( ${+functions[__fzf_history_widget_orig]} )) && return
-
-  functions[__fzf_history_widget_orig]="${functions[fzf-history-widget]}"
+  (( ${+functions[fzf-history-widget]} )) || return 0
+  (( ${+functions[_dual_history_smart_widget]} )) && return 0
+  # Alt keys reload these scripts; without them the views would silently break
+  [[ -x "$_DH_RELOAD_DIR/reload-all.sh" ]] || return 0
 
   _dual_history_smart_widget() {
     setopt localoptions pipefail no_aliases 2>/dev/null
     local selected
 
-    selected="$(FZF_DEFAULT_OPTS="$(__fzf_defaults "" "" "" 2>/dev/null)" \
-      fzf --height ${FZF_TMUX_HEIGHT:-40%} --tac --scheme=history \
-          --header="Tab:cycle   Alt+H:Human   Alt+I:AI   Alt+A:All" \
+    # HISTFILE is usually NOT exported: pass it through to fzf so its reload
+    # children read the same file the hooks write to, even when customized.
+    selected="$(HISTFILE="${HISTFILE:-$HOME/.zsh_history}" \
+      FZF_DEFAULT_OPTS="$(__fzf_defaults "" "-n2..,.. --scheme=history --highlight-line" 2>/dev/null)" \
+      fzf --height ${FZF_TMUX_HEIGHT:-40%} --tac --read0 \
+          --header="All history   |   Tab:cycle   Alt+H:Human   Alt+I:AI   Alt+A:All" \
           ${LBUFFER:+--query="${(qqq)LBUFFER}"} \
-          --bind="alt-a:reload($_DH_RELOAD_DIR/reload-all.sh)+change-header(All history)" \
+          --bind="alt-a:transform($_DH_RELOAD_DIR/reload-set.sh all $_DH_RELOAD_DIR)" \
           --bind="tab:transform($_DH_RELOAD_DIR/reload-cycle.sh $_DH_RELOAD_DIR)" \
-          --bind="alt-h:reload($_DH_RELOAD_DIR/reload-human.sh)+change-header(Human commands)" \
-          --bind="alt-i:reload($_DH_RELOAD_DIR/reload-ai.sh)+change-header(AI instructions)" \
-      < <("$_DH_RELOAD_DIR"/reload-all.sh 2>/dev/null))"
+          --bind="alt-h:transform($_DH_RELOAD_DIR/reload-set.sh human $_DH_RELOAD_DIR)" \
+          --bind="alt-i:transform($_DH_RELOAD_DIR/reload-set.sh ai $_DH_RELOAD_DIR)" \
+      < <(HISTFILE="${HISTFILE:-$HOME/.zsh_history}" "$_DH_RELOAD_DIR"/reload-all.sh 2>/dev/null))"
     local ret=$?
     if [[ -n "$selected" ]]; then
       LBUFFER="$selected"
