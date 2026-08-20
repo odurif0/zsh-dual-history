@@ -28,9 +28,15 @@ TMP_HIST="$(mktemp "${TMPDIR:-/tmp}/dh-main.XXXXXX")" || exit 1
 TMP_AI="$(mktemp "${TMPDIR:-/tmp}/dh-ai.XXXXXX")" || exit 1
 
 awk -v aiout="$TMP_AI" '
-  function flush_entry() {
-    if (buf ~ /^: [0-9]+:[0-9]+;:/) print buf >> aiout
-    else print buf
+  # Re-emit multi-line entries with zsh backslash-continuation: a raw
+  # newline would orphan continuation lines, which zsh later re-absorbs
+  # as separate re-stamped events (mass-timestamp pollution).
+  function flush_entry(  out) {
+    if (buf ~ /^: [0-9]+:[0-9]+;[ \t]*$/) return  # empty junk entries
+    out = buf
+    gsub(/\n/, "\\\n", out)
+    if (buf ~ /^: [0-9]+:[0-9]+;:/) print out >> aiout
+    else print out
   }
   {
     if (pend) { buf = buf "\n" $0 } else { buf = $0 }

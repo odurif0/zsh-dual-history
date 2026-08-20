@@ -3,6 +3,7 @@
 #   - zsh escapes embedded newlines as a trailing backslash
 #   - EXTENDED_HISTORY prefix ": <ts>:<dur>;" carries the timestamp
 function emit(ts, cmd) {
+  if (cmd ~ /^[ \t]*$/) return                    # junk/empty entries
   if (mode == "human" && cmd ~ /^:/) return
   if (mode == "ai" && cmd !~ /^:/) return
   printf "%s\t%s%c", ts, cmd, 0
