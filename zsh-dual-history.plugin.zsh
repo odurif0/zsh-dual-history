@@ -150,20 +150,18 @@ _dual_history_patch_ctrl_r() {
   # of fzf and cannot see this shell's history list. Taken at widget open,
   # so every view (initial + reloads) includes the current session even
   # without share_history/inc_append_history.
+  # NOTE: the $historytime assoc is NOT reliably populated (empty even with
+  # extended_history set) — stamping entries "now" would flood the top of
+  # the view with the whole in-memory history. Dump via `fc -A` instead:
+  # it writes native EXTENDED_HISTORY format with REAL timestamps, parsed
+  # by the same parse.awk as the on-disk history.
   _dual_history_dump_session() {
     export _DUAL_HISTORY_SESSION=""
     [[ -d "$_DH_STATE_DIR" ]] || return 0
-    local _sf="$_DH_STATE_DIR/session-$$" k e
-    local -a _out
-    for k in ${(onk)history}; do
-      e="${history[$k]}"
-      [[ -z "$e" || "$e" == :* ]] && continue
-      # No newline escaping here: the intermediate format is NUL-separated,
-      # so embedded newlines are safe (unlike the on-disk history format).
-      _out+=("${historytime[$k]:-${EPOCHSECONDS:-0}}"$'\t'"$e")
-    done
+    local _sf="$_DH_STATE_DIR/session-$$"
+    setopt localoptions extended_history
     : >| "$_sf" 2>/dev/null || return 0
-    (( ${#_out} )) && builtin print -rN -- "${_out[@]}" >> "$_sf" 2>/dev/null
+    builtin fc -A "$_sf" 2>/dev/null
     export _DUAL_HISTORY_SESSION="$_sf"
   }
 

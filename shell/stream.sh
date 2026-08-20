@@ -5,12 +5,14 @@ DIR="$(dirname "$0")"
 MODE="$1"
 case "$MODE" in
   human)
-    awk -v mode=human -f "$DIR/parse.awk" "${HISTFILE:-$HOME/.zsh_history}" 2>/dev/null
     # Current-session snapshot (in-memory history of the invoking shell),
-    # written by the widget at open time. Dedup keeps the newest version.
+    # written by the widget at open time in native EXTENDED_HISTORY format
+    # via `fc -A` — parsed like the on-disk file so real timestamps survive.
+    # Dedup keeps the newest version.
     if [ -n "${_DUAL_HISTORY_SESSION:-}" ] && [ -r "$_DUAL_HISTORY_SESSION" ]; then
-      cat "$_DUAL_HISTORY_SESSION"
+      awk -v mode=human -f "$DIR/parse.awk" "$_DUAL_HISTORY_SESSION"
     fi
+    awk -v mode=human -f "$DIR/parse.awk" "${HISTFILE:-$HOME/.zsh_history}" 2>/dev/null
     ;;
   ai)
     awk -v mode=ai -f "$DIR/parse.awk" "${DUAL_HISTORY_AI_FILE:-$HOME/.zsh_ai_history}" 2>/dev/null
