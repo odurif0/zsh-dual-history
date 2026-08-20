@@ -40,7 +40,7 @@ collapsed, and `FZF_CTRL_R_OPTS` is honored like in the upstream fzf widget.
 Just paste this to any coding agent:
 
 ```
-Install the zsh-dual-history Oh My Zsh plugin from github.com/odurif1/zsh-dual-history
+Install the zsh-dual-history Oh My Zsh plugin from github.com/odurif0/zsh-dual-history
 ```
 
 The agent will clone the repo, symlink it into `$ZSH_CUSTOM/plugins/`, add
@@ -50,7 +50,7 @@ any inline patches.
 ### Manual (Oh My Zsh)
 
 ```bash
-git clone https://github.com/odurif1/zsh-dual-history.git \
+git clone https://github.com/odurif0/zsh-dual-history.git \
   ${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/plugins/zsh-dual-history
 ```
 
@@ -63,7 +63,7 @@ plugins=(... zsh-dual-history)
 ### Manual (without Oh My Zsh)
 
 ```bash
-git clone https://github.com/odurif1/zsh-dual-history.git ~/.zsh-dual-history
+git clone https://github.com/odurif0/zsh-dual-history.git ~/.zsh-dual-history
 echo 'source ~/.zsh-dual-history/zsh-dual-history.plugin.zsh' >> ~/.zshrc
 ```
 
