@@ -1,10 +1,12 @@
 #!/bin/sh
 # Cycle the Ctrl+R view: All -> Human -> AI -> All.
 # State is keyed on the fzf PID ($PPID of this script) so concurrent fzf
-# instances don't interfere. Orphaned state files are purged by the plugin
-# at shell startup.
+# instances don't interfere. State dir is per-UID (XDG_RUNTIME_DIR when
+# available); orphaned files are purged by the plugin at shell startup.
 _DIR="$1"
-_STATE="/tmp/fzf-dual-history-${PPID}"
+_STATE_DIR="${XDG_RUNTIME_DIR:-${TMPDIR:-/tmp}}/zsh-dual-history-$(id -u)"
+mkdir -p "$_STATE_DIR" 2>/dev/null
+_STATE="$_STATE_DIR/cycle-${PPID}"
 state=$(cat "$_STATE" 2>/dev/null || echo 0)
 next=$(( (state + 1) % 3 ))
 echo "$next" > "$_STATE"
