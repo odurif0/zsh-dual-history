@@ -80,9 +80,14 @@ _dual_history_wrap_forge_accept() {
       fi
       builtin print "$@"
     }
-    _dual_history_forge_orig "$@"
-    (( ${+functions[print]} )) && unfunction print
-    [[ -n "$_dh_print_saved" ]] && functions[print]="$_dh_print_saved"
+    # always: restore `print` even if the original widget errors or is
+    # interrupted — a leaked global print() shadow would break the shell.
+    {
+      _dual_history_forge_orig "$@"
+    } always {
+      (( ${+functions[print]} )) && unfunction print
+      [[ -n "$_dh_print_saved" ]] && functions[print]="$_dh_print_saved"
+    }
   }
 }
 
@@ -93,7 +98,9 @@ _DH_RELOAD_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/zsh-dual-history"
 # writable via symlink by other local users were a hardening hole.
 _DH_STATE_DIR="${XDG_RUNTIME_DIR:-${TMPDIR:-/tmp}}/zsh-dual-history-$UID"
 
-mkdir -p "$_DH_RELOAD_DIR" "$_DH_STATE_DIR" 2>/dev/null
+(umask 077 && mkdir -p "$_DH_RELOAD_DIR" "$_DH_STATE_DIR") 2>/dev/null
+# downgrade dirs created by older versions with a lax umask
+chmod 700 "$_DH_STATE_DIR" 2>/dev/null
 if [[ -d "$_DH_PLUGIN_DIR/shell" ]]; then
   cp "$_DH_PLUGIN_DIR/shell"/* "$_DH_RELOAD_DIR/"
 fi
@@ -160,26 +167,32 @@ _dual_history_patch_ctrl_r() {
     [[ -d "$_DH_STATE_DIR" ]] || return 0
     local _sf="$_DH_STATE_DIR/session-$$"
     setopt localoptions extended_history
-    : >| "$_sf" 2>/dev/null || return 0
+    (umask 077 && : >| "$_sf") 2>/dev/null || return 0
     builtin fc -A "$_sf" 2>/dev/null
     export _DUAL_HISTORY_SESSION="$_sf"
   }
 
   _dual_history_smart_widget() {
     setopt localoptions pipefail no_aliases 2>/dev/null
-    local selected
+    local selected _dh_fzf_defaults=""
     local -a _dh_extra
     [[ -n "${FZF_CTRL_R_OPTS:-}" ]] && _dh_extra=(${(z)FZF_CTRL_R_OPTS})
+
+    # If __fzf_defaults is undefined (plugin sourced without fzf's completion),
+    # leave the user's own FZF_DEFAULT_OPTS untouched instead of clobbering it.
+    if (( ${+functions[__fzf_defaults]} )); then
+      _dh_fzf_defaults="$(__fzf_defaults "" "-n2..,.. --scheme=history --bind=ctrl-r:toggle-sort --highlight-line" 2>/dev/null)"
+    fi
 
     _dual_history_dump_session
 
     # HISTFILE is usually NOT exported: pass it through to fzf so its reload
     # children read the same file the hooks write to, even when customized.
     selected="$(HISTFILE="${HISTFILE:-$HOME/.zsh_history}" \
-      FZF_DEFAULT_OPTS="$(__fzf_defaults "" "-n2..,.. --scheme=history --bind=ctrl-r:toggle-sort --highlight-line" 2>/dev/null)" \
+      FZF_DEFAULT_OPTS="${_dh_fzf_defaults:-$FZF_DEFAULT_OPTS}" \
       fzf --height ${FZF_TMUX_HEIGHT:-40%} --tac --read0 \
           --header="All history   |   Tab:cycle   Alt+H:Human   Alt+I:AI   Alt+A:All" \
-          ${LBUFFER:+--query="${(qqq)LBUFFER}"} \
+          ${LBUFFER:+--query="$LBUFFER"} \
           ${_dh_extra[@]} \
           --bind="alt-a:transform($_DH_RELOAD_DIR/reload-set.sh all $_DH_RELOAD_DIR)" \
           --bind="tab:transform($_DH_RELOAD_DIR/reload-cycle.sh $_DH_RELOAD_DIR)" \

@@ -47,8 +47,10 @@ awk -v aiout="$TMP_AI" '
   END { if (pend) flush_entry() }
 ' "$HIST" > "$TMP_HIST" || { rm -f "$TMP_HIST" "$TMP_AI"; exit 1; }
 
-moved=$(awk 'END { print NR }' "$TMP_AI")
-kept=$(awk 'END { print NR }' "$TMP_HIST")
+# Count ENTRIES, not lines — multi-line entries span several physical lines
+# (internal newlines are backslash-escaped), so NR would over-count.
+moved=$(awk '{ if ($0 !~ /\\$/) n++ } END { print n+0 }' "$TMP_AI")
+kept=$(awk '{ if ($0 !~ /\\$/) n++ } END { print n+0 }' "$TMP_HIST")
 
 # In-place writes keep inode and permissions of the original files
 cat "$TMP_HIST" >| "$HIST" && cat "$TMP_AI" >> "$AI"
