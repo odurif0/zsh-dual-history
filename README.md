@@ -24,16 +24,13 @@ file.
 
 Your shell history stays 100% clean — `history`, `!!`, completions, everything —
 while AI instructions are preserved in a separate file you can still search
-and replay.
-
-On top of that, the `Ctrl+R` widget becomes a smart fzf interface showing
-**both** histories merged chronologically, with one-key toggles (`Tab`,
-`Alt+H`, `Alt+I`, `Alt+A`) to switch between All / Human / AI views on the fly.
-Commands typed in the current session are visible immediately (a snapshot of
-the in-memory history is taken each time the widget opens), duplicates are
-collapsed, and `FZF_CTRL_R_OPTS` is honored like in the upstream fzf widget.
+and replay. With fzf, `Ctrl+R` becomes a single interface over **both**
+histories (see [Usage](#usage)).
 
 ## Installation
+
+**Requirements:** zsh 5.0+. The fzf integration requires fzf 0.52.0+; the
+plugin works without fzf (everything except the smart `Ctrl+R`).
 
 ### With your AI coding agent (recommended)
 
@@ -43,9 +40,9 @@ Just paste this to any coding agent:
 Install the zsh-dual-history Oh My Zsh plugin from github.com/odurif0/zsh-dual-history
 ```
 
-The agent will clone the repo, symlink it into `$ZSH_CUSTOM/plugins/`, add
-`zsh-dual-history` to your `~/.zshrc` plugins array, and clean up
-any inline patches.
+The agent will clone the repo into `$ZSH_CUSTOM/plugins/`, add
+`zsh-dual-history` to the plugins array in your `~/.zshrc`, and reload your
+shell.
 
 ### Manual (Oh My Zsh)
 
@@ -67,10 +64,10 @@ git clone https://github.com/odurif0/zsh-dual-history.git ~/.zsh-dual-history
 echo 'source ~/.zsh-dual-history/zsh-dual-history.plugin.zsh' >> ~/.zshrc
 ```
 
-**Requirements:** zsh 5.0+
-**fzf integration requires:** fzf 0.52.0+ (plugin still works without it)
-
 ## Usage
+
+Open `Ctrl+R` and switch views on the fly — the fzf header always shows the
+active view:
 
 | Shortcut  | Action                                       |
 |-----------|----------------------------------------------|
@@ -79,39 +76,22 @@ echo 'source ~/.zsh-dual-history/zsh-dual-history.plugin.zsh' >> ~/.zshrc
 | `Alt+H`   | Switch to human commands only                |
 | `Alt+I`   | Switch to AI instructions only               |
 | `Alt+A`   | Switch back to all history                   |
-| `history` | Display human shell history only (clean)     |
-| `cat ~/.zsh_ai_history` | View raw AI instruction history   |
 
-The fzf header always shows the current active view.
-
-## What it does
-
-**Two layers, one plugin:**
-
-### Layer 1 — Clean history (always active, no dependencies)
-
-A `zshaddhistory` hook routes `:` commands to `~/.zsh_ai_history` and keeps
-them out of `~/.zsh_history`. A `preexec` hook writes the AI file for commands
-that go through the parser, and a wrapper around Forge's `forge-accept-line`
-widget catches the ones Forge records itself via `print -s`. This means
-**every** history feature stays clean:
+## What you see
 
 | Tool | What you see |
 |------|-------------|
 | `history` / `fc -l` | Human commands only |
 | `!!` / `!$` (bang expansion) | Human commands only |
-| Completion based on history | Human commands only |
+| History-based completion | Human commands only |
 | `cat ~/.zsh_history` | Human commands only |
 | `cat ~/.zsh_ai_history` | AI instructions only |
 
-### Layer 2 — fzf search (opt-in, requires fzf)
-
-The `Ctrl+R` widget is replaced with a smart fzf interface that shows **all**
-history by default, with one-key toggles to switch views on the fly.
+`~/.zsh_history` only gets fully clean once existing leaked instructions are
+moved out — see `scripts/migrate-pollution.sh` in
+[How it works](#how-it-works).
 
 ## How it works
-
-### Core (works everywhere, no dependencies)
 
 ```
 Command typed → zshaddhistory hook → starts with ":"?
@@ -123,24 +103,26 @@ Forge instruction → forge-accept-line widget → print -s intercepted
 ```
 
 The hooks run before zsh writes anything to disk — a single `if` on the
-command prefix. The Forge wrapper shadows the `print` builtin only for the
-duration of the widget call, intercepting exactly the `print -s` that adds
-the instruction to history; every other `print` invocation passes through.
+command prefix. A `preexec` hook writes the AI file for commands that go
+through the parser, and the wrapper around `forge-accept-line` shadows the
+`print` builtin only for the duration of the widget call, intercepting exactly
+the `print -s` that adds the instruction to history; every other `print`
+invocation passes through.
 
 If your `~/.zsh_history` already contains leaked instructions, run
 `scripts/migrate-pollution.sh` once to move them to the AI file (both files
 are backed up first).
 
-### fzf integration (builds on top of the core)
+### fzf integration
 
 The `Ctrl+R` widget is replaced with a custom fzf launcher that opens with
-**all** history (human + AI merged, interleaved chronologically, duplicates
-collapsed) by default. Tab and Alt keys use fzf's `reload` and `transform`
-actions to switch data sources dynamically without closing and reopening fzf.
-Tab state is keyed on the fzf PID so multiple fzf instances don't interfere.
-A snapshot of the shell's in-memory history is taken at widget open, so the
-current session's commands appear in every view even without
-`share_history`/`inc_append_history`. `FZF_CTRL_R_OPTS` is honored.
+**all** history: human + AI merged and interleaved chronologically,
+duplicates collapsed. Tab and Alt keys use fzf's `reload` and `transform`
+actions to switch data sources without closing fzf. A snapshot of the
+shell's in-memory history is taken at widget open, so the current session's
+commands appear in every view even without
+`share_history`/`inc_append_history`. `FZF_CTRL_R_OPTS` is honored like in
+the upstream fzf widget.
 
 ## Configuration
 
